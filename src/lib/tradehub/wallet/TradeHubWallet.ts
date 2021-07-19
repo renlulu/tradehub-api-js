@@ -71,7 +71,8 @@ class TradeHubLedgerSigner implements TradeHubSigner {
 
   async sign(doc: StdSignDoc): Promise<Buffer> {
     const message = doc.sortedJson()
-    return Buffer.from(this.ledger.sign(message))
+    const signature = await this.ledger.sign(message)
+    return Buffer.from(signature)
   }
 
   constructor(
