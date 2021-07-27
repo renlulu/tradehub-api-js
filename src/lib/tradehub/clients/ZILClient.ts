@@ -275,6 +275,97 @@ export class ZILClient {
         return callTx;
     }
 
+    public async lockDeposit2(params: ZILLockParams) {
+        console.log("this is from lock deposit 2")
+        const { address, amount, token, gasPrice, gasLimit, zilAddress, signer } = params
+        const networkConfig = this.getNetworkConfig()
+
+        const assetId = appendHexPrefix(token.asset_id)
+        const targetProxyHash = appendHexPrefix(this.getTargetProxyHash(token))
+        const feeAddress = appendHexPrefix(networkConfig.FeeAddress);
+        const toAssetHash = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(token.denom))
+        const swthAddress = ethers.utils.hexlify(address)
+        const contractAddress = this.getLockProxyAddress()
+
+        let zilliqa;
+        if (typeof signer === 'string') {
+            zilliqa = new Zilliqa(this.getProviderUrl())
+            zilliqa.wallet.addByPrivateKey(signer)
+        } else if (signer) {
+            zilliqa = new Zilliqa(this.getProviderUrl(), signer.provider)
+            this.walletProvider = signer
+        } else {
+            zilliqa = new Zilliqa(this.getProviderUrl())
+        }
+
+        const deployedContract = (this.walletProvider || zilliqa).contracts.at(contractAddress)
+        const balanceAndNonceResp = await zilliqa.blockchain.getBalance(stripHexPrefix(zilAddress))
+        if (balanceAndNonceResp.error !== undefined) {
+            throw new Error(balanceAndNonceResp.error.message)
+        }
+
+        const nonce = balanceAndNonceResp.result.nonce + 1
+        const version = bytes.pack(this.getConfig().ChainId,Number(1))
+
+        let nativeAmt = new BN(0)
+        if (token.asset_id == zeroAddress) {
+            nativeAmt = new BN(amount.toString())
+        }
+
+        const callParams = {
+            version: version,
+            nonce: nonce,
+            amount: nativeAmt,
+            gasPrice: new BN(gasPrice.toString()),
+            gasLimit: Long.fromString(gasLimit.toString()),
+        }
+
+        const transitionParams = [
+            {
+                vname: 'tokenAddr',
+                type: 'ByStr20',
+                value: assetId,
+              },
+              {
+                  vname: 'targetProxyHash',
+                  type: 'ByStr',
+                  value: targetProxyHash,
+              },
+              {
+                  vname: 'toAddress',
+                  type: 'ByStr',
+                  value: swthAddress,
+              },
+              {
+                  vname: 'toAssetHash',
+                  type: 'ByStr',
+                  value: toAssetHash,
+              },
+              {
+                  vname: 'feeAddr',
+                  type: 'ByStr',
+                  value: feeAddress,
+              },
+              {
+                  vname: 'amount',
+                  type: 'Uint256',
+                  value: amount.toString(),
+              },
+              {
+                  vname: 'feeAmount',
+                  type: 'Uint256',
+                  value: "0",
+              },
+        ]
+
+        const data = {
+            _tag: "lock",
+            params: [...transitionParams],
+        }
+
+        const callTx = await this.callContract(deployedContract, data._tag, data.params, callParams, true)
+        return callTx;
+    }
     /**
      * TargetProxyHash is a hash of token originator address that is used
      * for lockproxy asset registration and identification
