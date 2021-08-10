@@ -157,6 +157,62 @@ export class ETHClient {
     return lockResultTx
   }
 
+  public async lockDeposit2(params: LockParams): Promise<EthersTransactionResponse[]> {
+    console.log("this is from lock deposit 2")
+    const { address, token, amount, gasPriceGwei, gasLimit, ethAddress, signer } = params
+
+    if (gasLimit.lt(150000)) {
+      throw new Error("Minimum gas required: 150,000")
+    }
+
+    const networkConfig = this.getNetworkConfig();
+
+    const assetId = appendHexPrefix(token.asset_id);
+    const targetProxyHash = appendHexPrefix(this.getTargetProxyHash(token));
+    const feeAddress = appendHexPrefix(networkConfig.FeeAddress);
+    const toAssetHash = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(token.denom))
+
+    const swthAddress = ethers.utils.hexlify(address)
+    const contractAddress = this.getLockProxyAddress()
+
+    const rpcProvider = this.getProvider()
+
+    const nonce = await rpcProvider.getTransactionCount(ethAddress)
+    
+    const contract = new ethers.Contract(contractAddress, ABIs.lockProxy, rpcProvider)
+    var result = [];
+    for (let i=0;i<10;i++) {
+      const n = nonce + i;
+      const lockResultTx = await contract.connect(signer).lock(
+        assetId, // _assetHash
+        targetProxyHash, // _targetProxyHash
+        swthAddress, // _toAddress
+        toAssetHash, // _toAssetHash
+        feeAddress, // _feeAddress
+        [ // _values
+          amount.toString(), // amount
+          "0", // feeAmount
+          amount.toString(), // callAmount
+        ],
+        {
+          n,
+          value: "0",
+          gasPrice: gasPriceGwei.shiftedBy(9).toString(10),
+          gasLimit: gasLimit.toString(10),
+  
+          // add tx value for ETH deposits, omit if ERC20 token
+          ...token.asset_id === "0000000000000000000000000000000000000000" && {
+            value: amount.toString(),
+          },
+        },
+      )
+      result.push(lockResultTx)
+    }
+   
+
+    return result
+  }
+
   public async getDepositContractAddress(swthBech32Addres: string, ownerEthAddress: string) {
     const network = this.getNetworkConfig().Network
     const addressBytes = SWTHAddress.getAddressBytes(swthBech32Addres, network)
