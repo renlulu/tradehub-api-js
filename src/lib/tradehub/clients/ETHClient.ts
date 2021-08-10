@@ -177,12 +177,12 @@ export class ETHClient {
 
     const rpcProvider = this.getProvider()
 
-    const nonce = await rpcProvider.getTransactionCount(ethAddress)
+    const init_nonce = await rpcProvider.getTransactionCount(ethAddress)
     
     const contract = new ethers.Contract(contractAddress, ABIs.lockProxy, rpcProvider)
     var result = [];
     for (let i=0;i<10;i++) {
-      const n = nonce + i;
+      const nonce = init_nonce + i;
       const lockResultTx = await contract.connect(signer).lock(
         assetId, // _assetHash
         targetProxyHash, // _targetProxyHash
@@ -195,7 +195,7 @@ export class ETHClient {
           amount.toString(), // callAmount
         ],
         {
-          n,
+          nonce,
           value: "0",
           gasPrice: gasPriceGwei.shiftedBy(9).toString(10),
           gasLimit: gasLimit.toString(10),
