@@ -363,8 +363,16 @@ export class ZILClient {
             params: [...transitionParams],
         }
 
-        const callTx = await this.callContract(deployedContract, data._tag, data.params, callParams, true)
-        return callTx;
+        const tx = new Transaction(
+            {
+                ...callParams,
+                toAddr: deployedContract.address,
+                data: JSON.stringify(data)
+            },
+            deployedContract.provider,
+        );
+
+        return tx;
     }
     /**
      * TargetProxyHash is a hash of token originator address that is used
